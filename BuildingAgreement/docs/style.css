@@ -1,0 +1,22 @@
+:root { font-family: system-ui, sans-serif; color: #162e2a; background: #f5f8f6; line-height: 1.65; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+header, main, footer { padding: 1.3rem max(1rem, calc((100% - 50rem)/2)); }
+header { background: #12483f; color: white; }
+header a { color: inherit; }
+h1,h2,h3,p { margin-block: .25rem .85rem; }
+section, fieldset { border: 1px solid #d4e2db; border-radius: .75rem; background: white; margin: 0 0 1rem; padding: 1rem; min-width: 0; }
+legend { font-weight: 700; padding-inline: .35rem; }
+address { font-style: normal; }
+button, .button { background: #1b6858; color: white; border: none; border-radius: .45rem; padding: .65rem .9rem; font: inherit; cursor: pointer; display: inline-block; text-decoration: none; }
+button:disabled { opacity: .55; cursor: wait; }
+nav, .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+label { display: block; margin: .55rem 0; }
+input, select, textarea { margin-top: .2rem; padding: .5rem; border: 1px solid #81988f; border-radius: .35rem; width: 100%; font: inherit; background: white; }
+input[type=checkbox] { width: auto; margin-right: .45rem; }
+a { color: #165c4e; }
+img { max-width: 100%; height: auto; }
+output { display: block; margin-top: .55rem; white-space: pre-wrap; }
+#map { height: 300px; margin: .7rem 0; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

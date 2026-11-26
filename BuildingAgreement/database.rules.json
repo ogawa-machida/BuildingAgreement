@@ -1,0 +1,1 @@
+{"rules":{".read":false,".write":false,"cases":{".read":"auth != null && auth.token.agreementAdmin === true",".indexOn":["submittedAt"]}}}

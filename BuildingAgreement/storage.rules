@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /uploads/{uid}/{caseId}/{fileId} {
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && caseId.matches('[a-f0-9-]{36}') && fileId.matches('0[1-9]|1[0-2]')
+        && request.resource.size > 0 && request.resource.size <= 50 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+      allow get: if request.auth != null && request.auth.token.agreementAdmin == true;
+    }
+  }
+}
