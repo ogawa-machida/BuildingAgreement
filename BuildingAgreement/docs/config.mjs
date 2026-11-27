@@ -8,4 +8,4 @@ export const firebaseConfig = {
   appId: "1:227555881790:web:75ae130296a9b8d6cf326f"
 };
 export const region = "asia-northeast1";
-export const appCheckSiteKey = "";
+export const appCheckSiteKey = "6LeTCTMuAAAAAPG4hxok3RBq4QKQAEgGEpNl8UTO";
