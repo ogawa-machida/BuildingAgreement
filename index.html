@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>建築協約の手続き｜小川１・２丁目地区環境を守る会</title>
+<meta name="theme-color" content="#12483f">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script type="module" src="./app.mjs"></script>
+</head>
+<body>
+<header>
+<p>小川１・２丁目地区環境を守る会</p>
+<h1>建築協約の手続き</h1>
+<p>町田市小川１・２丁目の対象区域で建築を計画される方へ</p>
+<nav role="tablist" aria-label="手続き">
+<button id="application-tab" type="button" role="tab" aria-controls="application" aria-selected="true">建築承認願い</button>
+<button id="question-tab" type="button" role="tab" aria-controls="question" aria-selected="false" tabindex="-1">質問・事前相談</button>
+</nav>
+</header>
+<main>
+<section id="application" role="tabpanel" aria-labelledby="application-tab">
+<h2>建築協約対象区域</h2>
+<p>地図の黒枠内が対象区域です。地図を拡大して建築予定地を確認してください。境界付近や敷地が境界をまたぐ場合は、<a href="#question">質問・事前相談</a>へお進みください。</p>
+<div id="map" aria-label="対象区域の地図"></div>
+<p id="map-fallback" hidden>地図を読み込めませんでした。<a href="./agreement.pdf" target="_blank" rel="noopener">建築協約PDF</a>の別添図面をご確認ください。</p>
+<h2>建築承認願い</h2>
+<p>会への提出窓口です。市役所での建築確認等のお手続きは、所定の窓口で行ってください。</p>
+<form method="post" id="application-form">
+<fieldset><legend>建築場所と工事予定</legend>
+<label>建築場所（住所・地番）<input name="address" maxlength="300" required inputmode="text" lang="ja"></label>
+<label>対象区域の確認<select name="area" required><option value="">選択してください</option><option value="inside">区域図で対象区域内と確認した</option><option value="review">区域内か判断できない・境界をまたぐ</option></select></label>
+<label>工事区分<select name="work"><option value="new">新築</option><option value="addition">増築</option></select></label>
+<label>着工予定日<input name="start" type="date" required></label>
+<label>完工予定日<input name="end" type="date" required></label>
+</fieldset>
+<fieldset><legend>施主・申請人</legend>
+<label>施主氏名<input name="owner" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>施主住所<input name="ownerAddress" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>施主電話番号<input name="ownerPhone" type="tel" inputmode="tel" lang="en" maxlength="150" required></label>
+<label>申請人氏名・担当者名<input name="name" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>会社名<input name="company" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>申請人住所<input name="applicantAddress" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>申請人電話番号<input name="applicantPhone" type="tel" inputmode="tel" lang="en" maxlength="150" required></label>
+<label>返信先メール<input name="email" type="email" inputmode="email" lang="en" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
+</fieldset>
+<fieldset><legend>建築協約１）〜９）の確認</legend>
+<p><a href="./agreement.pdf" target="_blank" rel="noopener">協約の原文を確認</a>。第２種住居専用地域に関する１）・５）の扱い、小規模の物置・車庫等の例外は「質問・事前相談」で確認します。</p>
+<label class="agreement-check"><input type="checkbox" name="clause1" required><span>1）建築物は一戸建専用住宅とします。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause2" required><span>2）集合住宅は建設しません。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause3" required><span>3）建築物の地上階数は、地階を除き２階以下とします。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause4" required><span>4）地盤からの建築物の高さは９m以下、軒の高さは６.５m以下とします。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause5" required><span>5）外壁またはこれに代わる柱の面から、道路を含む隣地との境界線まで１m以上確保します。ただし、小規模な物置・車庫等を除きます。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause6" required><span>6）よう壁の増積（土盛り等）は行いません。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause7" required><span>7）室外機・換気扇等、騒音や臭気の発生源は、可能な限り隣家に迷惑がかからない場所に設置します。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause8" required><span>8）生活騒音と工事騒音について、近隣住居者に迷惑がかからないよう措置します。</span></label>
+<label class="agreement-check"><input type="checkbox" name="clause9" required><span>9）上下水道・都市ガス・汚染処理施設を完備します。</span></label>
+</fieldset>
+<fieldset><legend>図面を添付</legend>
+<p>PDF形式、合計50 MB以内、個別提出は最大12ファイルです。</p>
+<label>添付方法<select id="file-mode"><option value="combined">４種類を１つのPDFにまとめる</option><option value="separate">種類ごとにPDFを添付する</option></select></label>
+<div id="files"></div>
+</fieldset>
+<label><input type="checkbox" name="confirm" required>入力内容を確認しました。提出情報を会が受付・確認と連絡のために利用することに同意します。</label>
+<div class="actions"><button type="submit">建築承認願いを提出</button></div>
+<output id="application-result" role="status"></output>
+</form>
+</section>
+<section id="question" role="tabpanel" aria-labelledby="question-tab" hidden>
+<h2>質問・事前相談</h2>
+<form method="post" id="question-form">
+<label>氏名<input name="name" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>会社名<input name="company" maxlength="150" required inputmode="text" lang="ja"></label>
+<label>返信先メール<input name="email" type="email" inputmode="email" lang="en" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
+<label>建築場所（住所・地番）<input name="address" maxlength="300" required inputmode="text" lang="ja"></label>
+<label>質問・相談内容<textarea name="message" rows="5" maxlength="3000" required inputmode="text" lang="ja"></textarea></label>
+<label><input type="checkbox" name="confirm" required>提出情報を会が受付・確認と連絡のために利用することに同意します。</label>
+<button>質問・相談を送信</button>
+<output id="question-result" role="status"></output>
+</form>
+</section>
+<noscript>受付にはJavaScriptが必要です。</noscript>
+</main>
+<footer><a href="./admin.html">会の管理画面</a></footer>
+</body></html>
