@@ -116,3 +116,5 @@ export const updateAgreement = onCall(options, async request => {
   if (!result.committed) throw invalid("案件または状態を確認してください。");
   return { ok: true };
 });
+
+export { notifyNewApplication } from "./application-notification.mjs";
