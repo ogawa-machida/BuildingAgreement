@@ -64,35 +64,11 @@ function openCase(row) {
   const summary = element("pre", `受付番号　${row.id}\n受付日時　${date(row.submittedAt)}\n氏名　${row.name}\n会社名　${row.company}\n建築場所　${row.address}\nメール　${row.email}`);
   detail.replaceChildren(heading, summary, email);
   if (row.type === "application") {
-    const files = element("ul");
-    for (const file of row.files ?? []) {
-      const item = element("li");
-      const button = element("button", `${captions[file.kind]}を保存`);
-      item.append(button, element("p", file.name));
-      button.onclick = async () => {
-        button.disabled = true;
-        try {
-          const { ref, getBlob } = api.storageApi;
-          const blob = await getBlob(ref(api.storage, file.path), 50 * 1024 * 1024);
-          const url = URL.createObjectURL(blob);
-          const link = element("a");
-          link.href = url;
-          link.download = file.name;
-          link.click();
-          setTimeout(() => URL.revokeObjectURL(url), 30000);
-        } catch {
-          status.textContent = "図面を取得できません。管理権限とStorageの設定を確認してください。";
-        } finally {
-          button.disabled = false;
-        }
-      };
-      files.append(item);
-    }
     detail.append(element("h3", "工事と連絡先"), element("pre", toLines(row.info, infoNames)),
       element("h3", "協約の自己確認"), element("pre", Array.isArray(row.checks)
         ? row.checks.map((checked, i) => `${i + 1}） ${checked ? "確認済み" : "未確認"}`).join("\n")
         : toLines(row.answers ?? {}, answerNames)),
-      element("h3", "提出図面"), files);
+      element("p", "図面はメールの件名にある受付番号で照合してください。"));
   } else {
     detail.append(element("h3", "相談内容"), element("pre", row.message));
   }
@@ -100,6 +76,8 @@ function openCase(row) {
     : ["未回答", "対応中", "回答済"];
   const state = selectField("対応状況", states, row.status);
   const area = selectField("会による区域の確認", ["未確認", "区域内", "区域外", "要協議"], row.areaReview);
+  const drawing = row.type === "application"
+    ? selectField("図面の受領状況", ["未受領", "受領済み", "差し替え待ち"], row.drawingStatus) : null;
   const notes = element("label", "内部メモ");
   const textarea = element("textarea");
   textarea.maxLength = 4000;
@@ -111,9 +89,11 @@ function openCase(row) {
   save.onclick = async () => {
     save.disabled = true;
     try {
-      const update = { id: row.id, status: state.select.value, areaReview: area.select.value, note: textarea.value };
-      await api.call("updateAgreement", update);
-      Object.assign(row, update);
+      const changes = { status: state.select.value, areaReview: area.select.value, note: textarea.value };
+      if (drawing) changes.drawingStatus = drawing.select.value;
+      const { ref, update } = api.databaseApi;
+      await update(ref(api.db, `cases/${row.id}`), changes);
+      Object.assign(row, changes);
       renderList();
       result.textContent = "保存しました。";
     } catch {
@@ -122,7 +102,9 @@ function openCase(row) {
       save.disabled = false;
     }
   };
-  detail.append(state.wrapper, area.wrapper, notes, save, result);
+  detail.append(state.wrapper, area.wrapper);
+  if (drawing) detail.append(drawing.wrapper);
+  detail.append(notes, save, result);
   detail.hidden = false;
   detail.scrollIntoView({ block: "start" });
 }

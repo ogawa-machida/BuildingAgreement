@@ -1,4 +1,4 @@
-import { firebaseConfig, region, appCheckSiteKey } from "./config.mjs";
+import { firebaseConfig, appCheckSiteKey } from "./config.mjs";
 const sdk = "https://www.gstatic.com/firebasejs/11.10.0";
 let connection;
 
@@ -9,18 +9,15 @@ export async function connect() {
 
 async function initialize() {
   if (!appCheckSiteKey) throw new Error("受付サービスの公開設定が準備中です。");
-  const [appApi, authApi, functionsApi, appCheck, storageApi, databaseApi] = await Promise.all(
-    ["app", "auth", "functions", "app-check", "storage", "database"].map(name => import(`${sdk}/firebase-${name}.js`))
+  const [appApi, authApi, appCheck, databaseApi] = await Promise.all(
+    ["app", "auth", "app-check", "database"].map(name => import(`${sdk}/firebase-${name}.js`))
   );
   const app = appApi.initializeApp(firebaseConfig);
   appCheck.initializeAppCheck(app, { provider: new appCheck.ReCaptchaEnterpriseProvider(appCheckSiteKey),
     isTokenAutoRefreshEnabled: true });
   const auth = authApi.getAuth(app);
-  const functions = functionsApi.getFunctions(app, region);
   await auth.authStateReady();
-  return { auth, authApi, storageApi, storage: storageApi.getStorage(app),
-    db: databaseApi.getDatabase(app), databaseApi,
-    call: async (name, data) => (await functionsApi.httpsCallable(functions, name)(data)).data };
+  return { auth, authApi, db: databaseApi.getDatabase(app), databaseApi };
 }
 
 let login;
