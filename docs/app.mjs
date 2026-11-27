@@ -1,100 +1,58 @@
 import { applicant } from "./firebase.mjs";
-import { assessPoint } from "./area.mjs";
 import { boundary } from "./boundary.mjs";
 const $ = id => document.getElementById(id);
 const application = $("application-form");
 const question = $("question-form");
-const lookup = $("lookup");
-const output = $("area-result");
 const limit = 50 * 1024 * 1024;
 const labels = { combined: "４種類をまとめたPDF", guide: "案内図", site: "配置図", floor: "平面図", elevation: "立面図" };
-const verdict = { inside: "対象区域内の地点です。", outside: "対象区域外の地点です。",
-  review: "境界付近です。敷地の範囲について、会にご相談ください。" };
-
-for (const name of ["use", "multi", "retaining", "utilities", "exception"]) {
-  const select = application.elements[name];
-  for (const [label, value] of [["選択してください", ""], ["はい", "yes"], ["いいえ", "no"], ["判断できない", "unknown"]]) {
-    select.add(new Option(label, value));
-  }
-}
-
 let map;
-let marker;
-function mark(lat, lon) {
-  if (!map) return;
-  marker ??= L.marker([lat, lon]).addTo(map);
-  marker.setLatLng([lat, lon]);
-  map.panInside([lat, lon]);
-}
 function startMap() {
-  if (!globalThis.L) {
-    $("map").hidden = true;
-    return;
-  }
-  map = L.map("map", { scrollWheelZoom: false });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
-  const layer = L.polygon(boundary.map(([lon, lat]) => [lat, lon]), {
-    color: "#151e1a", weight: 2, fillColor: "#36785f", fillOpacity: .30, interactive: false
-  }).addTo(map);
-  map.fitBounds(layer.getBounds(), { padding: [20, 20] });
-  map.on("click", ({ latlng: { lat, lng } }) => {
-    mark(lat, lng);
-    output.textContent = `地図上で選んだ地点の目安｜${verdict[assessPoint(lng, lat)]}`;
-  });
-}
-if (document.readyState === "complete") startMap();
-else window.addEventListener("load", startMap);
-
-const addressValue = () => lookup.elements.address.value.trim();
-lookup.addEventListener("input", () => { output.textContent = ""; });
-lookup.addEventListener("submit", async event => {
-  event.preventDefault();
-  const address = addressValue();
-  const type = lookup.elements.type.value;
-  const button = event.submitter;
-  button.disabled = true;
-  output.textContent = "所在地を検索しています…";
-  try {
-    const api = await applicant();
-    const normalized = address.normalize("NFKC");
-    const query = /^小川[一二12]/.test(normalized) ? `東京都町田市${address}`
-      : normalized.startsWith("町田市") ? `東京都${address}` : address;
-    const result = await api.call("lookupAddress", { address: query, type });
-    if (addressValue() !== address || lookup.elements.type.value !== type) return;
-    if (result.reason) {
-      output.textContent = result.reason === "setup"
-        ? "住所検索は準備中です。地図で位置を確認するか、会にご相談ください。"
-        : "入力から正確な地点を特定できません。地図で位置を確認するか、会にご相談ください。";
+  if (!$("application").hidden && !map) {
+    if (!globalThis.L) {
+      $("map").hidden = true;
+      $("map-fallback").hidden = false;
       return;
     }
-    mark(result.lat, result.lon);
-    output.textContent = `${result.matched}\n${verdict[assessPoint(result.lon, result.lat)]}${result.attribution ? "\n" + result.attribution : ""}`;
-  } catch (error) {
-    if (addressValue() === address && lookup.elements.type.value === type) {
-      output.textContent = "住所検索を利用できません。地図で位置を確認するか、会にご相談ください。";
-    }
-  } finally {
-    button.disabled = false;
+    $("map").hidden = false;
+    $("map-fallback").hidden = true;
+    map = L.map("map", { scrollWheelZoom: false });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).on("tileerror", () => { $("map-fallback").hidden = false; }).addTo(map);
+    const layer = L.polygon(boundary.map(([lon, lat]) => [lat, lon]), {
+      color: "#151e1a", weight: 2, fillColor: "#36785f", fillOpacity: .30, interactive: false
+    }).addTo(map);
+    map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+  } else if (!$("application").hidden) {
+    map.invalidateSize();
   }
-});
-function transferAddress(form, hash) {
-  form.elements.address.value = addressValue();
-  if (form === application) application.elements.area.value = "";
-  location.hash = hash;
-  form.elements.address.focus();
 }
-$("apply-address").onclick = () => transferAddress(application, "application");
-$("ask-address").onclick = () => transferAddress(question, "question");
-$("transfer-question").onclick = () => {
-  for (const name of ["address", "name", "email", "company"]) {
-    const value = application.elements[name].value.trim();
-    if (value) question.elements[name].value = value;
+
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function showTab() {
+  const current = location.hash === "#question" ? "question" : "application";
+  for (const tab of tabs) {
+    const panel = tab.getAttribute("aria-controls");
+    const active = current === panel;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    $(panel).hidden = !active;
   }
-  location.hash = "question";
-  question.elements.message.focus();
-};
+  if (document.readyState === "complete") startMap();
+}
+for (const [index, tab] of tabs.entries()) {
+  tab.onclick = () => { location.hash = tab.getAttribute("aria-controls"); };
+  tab.onkeydown = event => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next = tabs[event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + 1) % tabs.length];
+    next.click();
+    next.focus();
+  };
+}
+window.addEventListener("hashchange", showTab);
+window.addEventListener("load", startMap);
+showTab();
 
 function renderFiles() {
   const kinds = $("file-mode").value === "combined" ? ["combined"] : ["guide", "site", "floor", "elevation"];
@@ -114,17 +72,15 @@ $("file-mode").onchange = renderFiles;
 renderFiles();
 
 function applicationData(values) {
-  if (values.area !== "inside" || values.exception !== "no" || values.use !== "yes" || values.multi !== "no" ||
-      Number(values.stories) > 2 || Number(values.height) > 9 || Number(values.eaves) > 6.5 ||
-      Number(values.setback) < 1 || values.retaining !== "no" || values.utilities !== "yes") {
-    throw new Error("会での確認が必要です。「入力を引き継いで相談する」からご連絡ください。");
+  if (values.area !== "inside") {
+    throw new Error("対象区域が分からない場合は、質問・事前相談タブからご連絡ください。");
   }
   if (values.end < values.start) throw new Error("完工予定日は着工予定日以降を入力してください。");
   const pick = keys => Object.fromEntries(keys.map(key => [key, values[key]]));
   return {
     info: pick(["owner", "ownerAddress", "ownerPhone", "applicantAddress", "applicantPhone", "work", "start", "end"]),
-    answers: pick(["use", "multi", "stories", "height", "eaves", "setback", "retaining", "equipment", "living", "workNoise", "utilities"]),
-    area: values.area, exception: values.exception
+    checks: Array.from({ length: 9 }, (_, i) => values[`clause${i + 1}`] === "on"),
+    area: values.area
   };
 }
 

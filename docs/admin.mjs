@@ -89,7 +89,9 @@ function openCase(row) {
       files.append(item);
     }
     detail.append(element("h3", "工事と連絡先"), element("pre", toLines(row.info, infoNames)),
-      element("h3", "協約の自己確認"), element("pre", toLines(row.answers, answerNames)),
+      element("h3", "協約の自己確認"), element("pre", Array.isArray(row.checks)
+        ? row.checks.map((checked, i) => `${i + 1}） ${checked ? "確認済み" : "未確認"}`).join("\n")
+        : toLines(row.answers ?? {}, answerNames)),
       element("h3", "提出図面"), files);
   } else {
     detail.append(element("h3", "相談内容"), element("pre", row.message));

@@ -9,11 +9,9 @@
 5. Firebase CLI で権限のあるアカウントにログインします。Node.js 22 で `npm --prefix functions install` の後、`firebase deploy --only database,storage,functions --project buildingagreement-9ee19` を実行します。この操作は当該プロジェクトの Database/Storage Rules を置き換えます。
 6. 会長用のメールアドレスで Authentication ユーザーを作成し、Application Default Credentials を設定した管理者環境で `node functions/grant-admin.mjs 管理者メールアドレス` を実行します。前任者の権限を外す場合は末尾に `revoke` を追加します。退任時に即時停止が必要な場合は Firebase Authentication でアカウントも無効化します。
 
-## 住所検索
+## 対象区域の確認
 
-区域は提供されたWKTの座標から生成しています。地図をクリックすると、区域内・区域外・境界付近が表示されます。内外にかかわらず境界から20 m以内は「会に相談」とする暫定設定です。
-
-住所・地番からの検索は、全国Q地図のジオコーダー接続先を入手し、`functions/.env.example` を参考に `functions/.env.buildingagreement-9ee19` に `QCHIZU_GEOCODER_URL` を設定して Functions をデプロイすると有効になります。接続先は https://qchizu.jp/geocoder-api/ に記載の窓口から入手します。住居番号・地番の位置まで一致した単一候補を使います。接続先の利用条件に従い、小川１・２丁目の実住所・地番で結果を確認してください。住所検索が利用できない場合も地図上の地点で区域を確認できます。
+提供されたWKTの座標を基に、地図に対象区域の境界を表示します。建築予定地が境界付近にある、または敷地が区域をまたぐ場合は、質問・事前相談をご利用ください。
 
 ## 動作確認
 

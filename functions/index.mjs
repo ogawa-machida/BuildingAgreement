@@ -30,35 +30,20 @@ function date(value) {
   return value;
 }
 
-function number(value) {
-  if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value) || Number(value) > 1000) {
-    throw invalid("階数・高さ・距離の入力を確認してください。");
-  }
-  return Number(value);
-}
-
 function checkApplication(data) {
   const info = data.info ?? {};
-  const answers = data.answers ?? {};
   const fields = ["owner", "ownerAddress", "ownerPhone", "applicantAddress", "applicantPhone"];
   const parties = Object.fromEntries(fields.map(key => [key, text(info[key], 150, true)]));
   const start = date(info.start);
   const end = date(info.end);
-  const stories = number(answers.stories);
-  const height = number(answers.height);
-  const eaves = number(answers.eaves);
-  const setback = number(answers.setback);
   if (end < start || !["new", "addition"].includes(info.work)) throw invalid("工事予定を確認してください。");
-  if (!(data.area === "inside" && data.exception === "no" && answers.use === "yes" && answers.multi === "no" && Number.isInteger(stories)
-    && stories >= 1 && stories <= 2 && height > 0 && height <= 9 && eaves > 0 && eaves <= 6.5
-    && setback >= 1 && answers.retaining === "no" && answers.utilities === "yes")) {
-    throw invalid("協約に関する確認が必要です。質問・事前相談へお進みください。");
+  if (data.area !== "inside" || !Array.isArray(data.checks) || data.checks.length !== 9
+    || !Array.from(data.checks).every(value => value === true)) {
+    throw invalid("対象区域と建築協約１）〜９）を確認してください。");
   }
   return {
     info: { ...parties, work: info.work, start, end },
-    answers: { use: "yes", multi: "no", stories, height, eaves, setback, retaining: "no",
-      equipment: text(answers.equipment, 1000, true), living: text(answers.living, 1000, true),
-      workNoise: text(answers.workNoise, 1000, true), utilities: "yes" },
+    checks: data.checks,
     areaDeclaration: "inside", agreementVersion: "1978-01-01"
   };
 }
@@ -104,7 +89,7 @@ export const submitAgreement = onCall(options, async request => {
   const email = text(data.email, 254, true);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw invalid("メールアドレスを確認してください。");
   const base = { uid, type: data.type, email, name: text(data.name, 150, true),
-    company: text(data.company, 150), address: text(data.address, 300, isApplication),
+    company: text(data.company, 150, true), address: text(data.address, 300, true),
     consent: true, submittedAt: ServerValue.TIMESTAMP, status: isApplication ? "受付済" : "未回答" };
   const body = isApplication
     ? { ...checkApplication(data), files: await checkFiles(uid, data.id, data.files) }
@@ -130,31 +115,4 @@ export const updateAgreement = onCall(options, async request => {
   });
   if (!result.committed) throw invalid("案件または状態を確認してください。");
   return { ok: true };
-});
-
-export const lookupAddress = onCall(options, async request => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "受付画面から開き直してください。");
-  const address = text(request.data?.address, 150, true);
-  if (!["residence", "parcel"].includes(request.data?.type)) throw invalid("住所の種類を選択してください。");
-  const endpoint = process.env.QCHIZU_GEOCODER_URL;
-  if (!endpoint) return { reason: "setup" };
-  const url = new URL(endpoint);
-  url.searchParams.set("address", address);
-  url.searchParams.set("target", request.data.type === "parcel" ? "parcel" : "all");
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(7000), redirect: "error" });
-    if (!response.ok) return { reason: "unavailable" };
-    const result = await response.json();
-    const candidate = result.candidates?.[0];
-    const level = request.data.type === "parcel" ? "chiban" : "jukyo";
-    if (result.truncated || result.candidates?.length !== 1 || candidate.match_level !== level
-      || candidate.location_level !== level || candidate.unused || candidate.trailing || candidate.supplemented
-      || !Number.isFinite(candidate.position?.lat) || !Number.isFinite(candidate.position?.lon)) {
-      return { reason: "imprecise" };
-    }
-    return { ...candidate.position, matched: text(candidate.matched, 200),
-      attribution: text(result.attribution, 200) };
-  } catch {
-    return { reason: "unavailable" };
-  }
 });
