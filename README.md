@@ -19,16 +19,15 @@
 
 本番の公開前に、テストデータで質問のみ、一括PDF、個別PDF、境界付近、会長の閲覧・図面取得・回答状況の更新を確認します。異なるアカウントから申請内容や他人の図面を読み取れないことも確認します。申請者には画面で受付番号を表示し、回答は会長が管理画面のメールリンクから送ります。申請者への自動メール送信、再提出リンク、図面の保管期間を適用する自動削除は本版の対象外です。試験で中断したアップロードが残った場合は、案件の図面参照パスと照合してから Storage で削除します。公開する協約書・対象区域図は掲載可否を確認してください。
 
-## 建築承認願いの管理者メール通知
+## 建築承認願い・質問の管理者メール通知
 
-Realtime Database の `cases` に新しい建築承認願いが保存されると、Resend を使って管理者に受付番号と管理画面URLを送ります。質問・事前相談は通知対象外です。本文には申請者の個人情報や図面を含めません。
+Realtime Database の `cases` に建築承認願い、質問・事前相談が新規保存されると、Resend を使って受付番号と管理画面URLをメールで送ります。宛先はFirebase Authenticationで `agreementAdmin` 権限があり、アカウントが有効でメールアドレスが登録されている全管理者です。本文には申請者の個人情報や図面を含めません。
 
 1. Resendで本番の差出人ドメインを認証し、送信専用のAPIキーを発行します。
-2. `functions/.env.buildingagreement-9ee19` に以下の２行を設定します。値は管理する実際のメールアドレスに置き換えてください。このファイルはGitHubにアップロードしません。
+2. `functions/.env.buildingagreement-9ee19` に差出人を設定します。旧版で設定した `AGREEMENT_ADMIN_EMAIL` 行は削除できます。このファイルはGitHubにアップロードしません。
 
    ```dotenv
    AGREEMENT_MAIL_FROM=notice@your-verified-domain.example
-   AGREEMENT_ADMIN_EMAIL=your-admin@example.com
    ```
 
 3. プロジェクトのルートで以下を実行します。APIキーはコマンドが表示する入力欄に貼り付けます。
@@ -39,4 +38,6 @@ Realtime Database の `cases` に新しい建築承認願いが保存される�
    npx firebase-tools deploy --only functions --project buildingagreement-9ee19
    ```
 
-4. テスト用の建築承認願いを１件送信し、管理者の受信箱と会の管理画面を確認します。通知の成否は申請の保存結果に影響しません。通知が届かない場合は `notifyNewApplication` のログとResendの送信履歴を確認してください。
+4. テスト用の建築承認願いと質問を１件ずつ送信し、管理者の受信箱と会の管理画面を確認します。通知の成否は申請の保存結果に影響しません。通知が届かない場合は `notifyNewApplication` のログとResendの送信履歴を確認してください。
+
+通知関数の実行サービス アカウントには Firebase Authentication のユーザー一覧を読み取る権限が必要です。権限不足がログに出る場合は、対象プロジェクトの IAM で実行サービス アカウントに Firebase Authentication 閲覧者（`roles/firebaseauth.viewer`）を付与してください。
