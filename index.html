@@ -4,17 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>建築協約の手続き｜小川１・２丁目地区環境を守る会</title>
-<meta name="theme-color" content="#12483f">
-<link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
-<link rel="manifest" href="./manifest.webmanifest">
 <link rel="stylesheet" href="./style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script type="module" src="./app.mjs"></script>
+<script type="module" src="./version.mjs"></script>
 </head>
 <body>
 <header>
+<small id="app-version"></small>
+
 <p>小川１・２丁目地区環境を守る会</p>
 <h1>建築協約の手続き</h1>
 <p>町田市小川１・２丁目の対象区域で建築を計画される方へ</p>
@@ -33,21 +32,21 @@
 <p>会への提出窓口です。市役所での建築確認等のお手続きは、所定の窓口で行ってください。</p>
 <form method="post" id="application-form">
 <fieldset><legend>建築場所と工事予定</legend>
-<label>建築場所（住所・地番）<input name="address" maxlength="300" required inputmode="text" lang="ja"></label>
+<label>建築場所（住所・地番）<input name="address" maxlength="300" required></label>
 <label>対象区域の確認<select name="area" required><option value="">選択してください</option><option value="inside">区域図で対象区域内と確認した</option><option value="review">区域内か判断できない・境界をまたぐ</option></select></label>
 <label>工事区分<select name="work"><option value="new">新築</option><option value="addition">増築</option></select></label>
 <label>着工予定日<input name="start" type="date" required></label>
 <label>完工予定日<input name="end" type="date" required></label>
 </fieldset>
 <fieldset><legend>施主・申請人</legend>
-<label>施主氏名<input name="owner" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>施主住所<input name="ownerAddress" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>施主電話番号<input name="ownerPhone" type="tel" inputmode="tel" lang="en" maxlength="150" required></label>
-<label>申請人氏名・担当者名<input name="name" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>会社名<input name="company" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>申請人住所<input name="applicantAddress" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>申請人電話番号<input name="applicantPhone" type="tel" inputmode="tel" lang="en" maxlength="150" required></label>
-<label>返信先メール<input name="email" type="email" inputmode="email" lang="en" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
+<label>施主氏名<input name="owner" maxlength="150" required></label>
+<label>施主住所<input name="ownerAddress" maxlength="150" required></label>
+<label>施主電話番号<input name="ownerPhone" type="tel" maxlength="150" required></label>
+<label>申請人氏名・担当者名<input name="name" maxlength="150" required></label>
+<label>会社名<input name="company" maxlength="150" required></label>
+<label>申請人住所<input name="applicantAddress" maxlength="150" required></label>
+<label>申請人電話番号<input name="applicantPhone" type="tel" maxlength="150" required></label>
+<label>返信先メール<input name="email" type="email" maxlength="254" required></label>
 </fieldset>
 <fieldset><legend>建築協約１）〜９）の確認</legend>
 <p><a href="./agreement.pdf" target="_blank" rel="noopener">協約の原文を確認</a>。第２種住居専用地域に関する１）・５）の扱い、小規模の物置・車庫等の例外は「質問・事前相談」で確認します。</p>
@@ -61,10 +60,10 @@
 <label class="agreement-check"><input type="checkbox" name="clause8" required><span>8）生活騒音と工事騒音について、近隣住居者に迷惑がかからないよう措置します。</span></label>
 <label class="agreement-check"><input type="checkbox" name="clause9" required><span>9）上下水道・都市ガス・汚染処理施設を完備します。</span></label>
 </fieldset>
-<fieldset><legend>図面を添付</legend>
-<p>PDF形式、合計50 MB以内、個別提出は最大12ファイルです。</p>
-<label>添付方法<select id="file-mode"><option value="combined">４種類を１つのPDFにまとめる</option><option value="separate">種類ごとにPDFを添付する</option></select></label>
-<div id="files"></div>
+<fieldset><legend>図面の提出</legend>
+<p>案内図・配置図・平面図・立面図を、まとめたPDFまたは個別のPDFで選んでください。受付番号の発行後、メールアプリで図面を送信します。</p>
+<label>提出図面（PDF）<input id="drawing-files" type="file" accept=".pdf,application/pdf" multiple required></label>
+<p>送信前に、メールアプリの差出人がフォームの返信先メールと一致することをご確認ください。</p>
 </fieldset>
 <label><input type="checkbox" name="confirm" required>入力内容を確認しました。提出情報を会が受付・確認と連絡のために利用することに同意します。</label>
 <div class="actions"><button type="submit">建築承認願いを提出</button></div>
@@ -74,13 +73,14 @@
 <section id="question" role="tabpanel" aria-labelledby="question-tab" hidden>
 <h2>質問・事前相談</h2>
 <form method="post" id="question-form">
-<label>氏名<input name="name" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>会社名<input name="company" maxlength="150" required inputmode="text" lang="ja"></label>
-<label>返信先メール<input name="email" type="email" inputmode="email" lang="en" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
-<label>建築場所（住所・地番）<input name="address" maxlength="300" required inputmode="text" lang="ja"></label>
-<label>質問・相談内容<textarea name="message" rows="5" maxlength="3000" required inputmode="text" lang="ja"></textarea></label>
+<label>氏名<input name="name" maxlength="150" required></label>
+<label>会社名<input name="company" maxlength="150" required></label>
+<label>返信先メール<input name="email" type="email" maxlength="254" required></label>
+<label>建築場所（住所・地番）<input name="address" maxlength="300" required></label>
+<label>質問・相談内容<textarea name="message" rows="5" maxlength="3000" required></textarea></label>
 <label><input type="checkbox" name="confirm" required>提出情報を会が受付・確認と連絡のために利用することに同意します。</label>
-<button>質問・相談を送信</button>
+<p>メールアプリで下書きを開きます。差出人を確認し、メールアプリから送信してください。</p>
+<button>質問・相談のメールを開く</button>
 <output id="question-result" role="status"></output>
 </form>
 </section>
