@@ -6,7 +6,6 @@ const list = $("cases");
 const date = milliseconds => new Intl.DateTimeFormat("ja-JP", {
   dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo"
 }).format(new Date(milliseconds));
-const captions = { guide: "案内図", site: "配置図", floor: "平面図", elevation: "立面図", combined: "一括PDF" };
 const answerNames = { use: "１）一戸建専用住宅", multi: "２）集合住宅", stories: "３）地上階数",
   height: "４）建築物の高さ（m）", eaves: "４）軒の高さ（m）",
   setback: "５）境界からの距離（m）", retaining: "６）よう壁の増積等",
@@ -18,6 +17,30 @@ const valueNames = { yes: "はい", no: "いいえ", new: "新築", addition: "�
 const api = await connect().catch(error => { status.textContent = error.message; });
 let records = [];
 let selected;
+const requestedCase = new URLSearchParams(location.search).get("case");
+const validCaseId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+async function openCaseById(id) {
+  if (!validCaseId.test(id ?? "")) {
+    if (id) status.textContent = "受付番号の形式を確認してください。";
+    return;
+  }
+  const { get, ref } = api.databaseApi;
+  const snapshot = await get(ref(api.db, `cases/${id}`));
+  if (snapshot.exists()) openCase({ ...snapshot.val(), id });
+  else status.textContent = "指定された受付番号の案件が見つかりません。";
+}
+
+function gmailThreadUrl(value) {
+  if (!value) return "";
+  const url = new URL(value);
+  if (url.origin !== "https://mail.google.com" || url.username || url.password
+      || !/^\/mail\/u\/[^/]+\/$/.test(url.pathname) || !/^#[^\s]+\/[A-Za-z0-9_-]+$/.test(url.hash)) {
+    throw new Error("Gmailでメールを開いたときのURLを入力してください。");
+  }
+  return url.href;
+}
+
 
 function element(tag, content) {
   const node = document.createElement(tag);
@@ -59,8 +82,8 @@ function renderList() {
 function openCase(row) {
   selected = row.id;
   const heading = element("h2", row.type === "application" ? "建築承認願い" : "質問・事前相談");
-  const email = element("a", "申請者にメールで連絡");
-  email.href = "mailto:" + encodeURIComponent(row.email).replace("%40", "@");
+  const email = element("a", "メールアプリで新規連絡を作成");
+  email.href = "mailto:" + encodeURIComponent(row.email).replace("%40", "@") + "?subject=" + encodeURIComponent(`【建築協約】受付番号 ${row.id}`);
   const summary = element("pre", `受付番号　${row.id}\n受付日時　${date(row.submittedAt)}\n氏名　${row.name}\n会社名　${row.company}\n建築場所　${row.address}\nメール　${row.email}`);
   detail.replaceChildren(heading, summary, email);
   if (row.type === "application") {
@@ -78,6 +101,28 @@ function openCase(row) {
   const area = selectField("会による区域の確認", ["未確認", "区域内", "区域外", "要協議"], row.areaReview);
   const drawing = row.type === "application"
     ? selectField("図面の受領状況", ["未受領", "受領済み", "差し替え待ち"], row.drawingStatus) : null;
+  const mail = selectField("メール対応", ["メール待ち", "メール受領", "返信済み"], row.mailStatus);
+  const threadLabel = element("label", "GmailのスレッドURL");
+  const thread = element("input");
+  thread.type = "url";
+  thread.maxLength = 500;
+  thread.value = row.gmailThreadUrl ?? "";
+  threadLabel.append(thread);
+  const gmail = element("a", row.gmailThreadUrl ? "元のメールをGmailで開いて返信" : "受付番号でGmailを検索");
+  try {
+    gmail.href = gmailThreadUrl(row.gmailThreadUrl) || "https://mail.google.com/mail/u/0/#search/" + encodeURIComponent(row.id);
+  } catch {
+    gmail.href = "https://mail.google.com/mail/u/0/#search/" + encodeURIComponent(row.id);
+  }
+  gmail.target = "_blank";
+  gmail.rel = "noopener noreferrer";
+  const history = element("ul");
+  const renderHistory = () => {
+    const entries = Object.values(row.history ?? {}).sort((a, b) => b.at - a.at);
+    history.replaceChildren(...entries.map(entry => element("li", `${date(entry.at)}　${entry.summary}`)));
+    if (!entries.length) history.append(element("li", "対応履歴はまだありません。"));
+  };
+  renderHistory();
   const notes = element("label", "内部メモ");
   const textarea = element("textarea");
   textarea.maxLength = 4000;
@@ -89,11 +134,32 @@ function openCase(row) {
   save.onclick = async () => {
     save.disabled = true;
     try {
-      const changes = { status: state.select.value, areaReview: area.select.value, note: textarea.value };
+      const changes = {
+        status: state.select.value, areaReview: area.select.value, note: textarea.value,
+        mailStatus: mail.select.value, gmailThreadUrl: gmailThreadUrl(thread.value.trim())
+      };
       if (drawing) changes.drawingStatus = drawing.select.value;
-      const { ref, update } = api.databaseApi;
-      await update(ref(api.db, `cases/${row.id}`), changes);
+      const labels = { status: "対応状況", areaReview: "区域確認", drawingStatus: "図面",
+        mailStatus: "メール", note: "内部メモ", gmailThreadUrl: "Gmailリンク" };
+      const summary = Object.entries(changes).filter(([key, value]) => row[key] !== value)
+        .map(([key, value]) => ["note", "gmailThreadUrl"].includes(key) ? labels[key] + "を更新" : labels[key] + "：" + value)
+        .join("、");
+      if (!summary) {
+        result.textContent = "変更はありません。";
+        return;
+      }
+      const { ref, update, push, serverTimestamp } = api.databaseApi;
+      const casePath = `cases/${row.id}`;
+      const entryId = push(ref(api.db, `${casePath}/history`)).key;
+      await update(ref(api.db, casePath), { ...changes,
+        [`history/${entryId}`]: { at: serverTimestamp(), summary } });
       Object.assign(row, changes);
+      row.history = { ...row.history, [entryId]: { at: Date.now(), summary } };
+      const listed = records.find(item => item.id === row.id);
+      if (listed) Object.assign(listed, row);
+      gmail.href = changes.gmailThreadUrl || "https://mail.google.com/mail/u/0/#search/" + encodeURIComponent(row.id);
+      gmail.textContent = changes.gmailThreadUrl ? "元のメールをGmailで開いて返信" : "受付番号でGmailを検索";
+      renderHistory();
       renderList();
       result.textContent = "保存しました。";
     } catch {
@@ -104,7 +170,9 @@ function openCase(row) {
   };
   detail.append(state.wrapper, area.wrapper);
   if (drawing) detail.append(drawing.wrapper);
-  detail.append(notes, save, result);
+  detail.append(mail.wrapper, threadLabel, gmail,
+    element("p", "Thunderbirdで元のメールに返信する場合は、受付番号で検索してください。送信後はメール対応を「返信済み」にして保存します。"),
+    notes, save, result, element("h3", "対応履歴"), history);
   detail.hidden = false;
   detail.scrollIntoView({ block: "start" });
 }
@@ -127,6 +195,7 @@ if (api) {
     $("login-section").hidden = true;
     $("admin").hidden = false;
     status.textContent = "";
+    if (requestedCase) await openCaseById(requestedCase);
   };
   $("filter").oninput = renderList;
   $("refresh").onclick = async () => {
@@ -134,6 +203,7 @@ if (api) {
       await listCases();
       const current = records.find(row => row.id === selected);
       if (current) openCase(current);
+      else if (selected) await openCaseById(selected);
       else detail.hidden = true;
     } catch {
       status.textContent = "一覧を更新できませんでした。";

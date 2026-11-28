@@ -1,1 +1,129 @@
-{"rules":{".read":false,".write":false,"cases":{".read":"auth != null && auth.token.agreementAdmin === true",".indexOn":["submittedAt"]}}}
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "cases": {
+      ".read": "auth != null && auth.token.agreementAdmin === true",
+      ".indexOn": [
+        "submittedAt"
+      ],
+      "$id": {
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'anonymous' && !data.exists() && newData.exists() && newData.child('uid').val() === auth.uid && $id.matches(/^[0-9a-f-]{36}$/)",
+        ".validate": "data.exists() || (newData.hasChildren([\"uid\", \"type\", \"name\", \"company\", \"address\", \"email\", \"consent\", \"status\", \"submittedAt\"]) && ((newData.child('type').val() === 'application' && newData.hasChildren([\"info\", \"checks\", \"areaDeclaration\", \"agreementVersion\", \"drawingStatus\"]) && !newData.child('message').exists()) || (newData.child('type').val() === 'question' && newData.child('message').exists() && !newData.child('info').exists() && !newData.child('checks').exists() && !newData.child('areaDeclaration').exists() && !newData.child('agreementVersion').exists() && !newData.child('drawingStatus').exists())))",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+        },
+        "company": {
+          ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+        },
+        "address": {
+          ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/.*\\S.*/)"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/.*\\S.*/) && newData.val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/)"
+        },
+        "message": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 3000"
+        },
+        "type": {
+          ".validate": "newData.val() === 'application' || newData.val() === 'question'"
+        },
+        "uid": {
+          ".validate": "newData.val() === auth.uid"
+        },
+        "consent": {
+          ".validate": "newData.val() === true"
+        },
+        "submittedAt": {
+          ".read": "auth != null && data.parent().child('uid').val() === auth.uid",
+          ".validate": "newData.isNumber() && newData.val() === now"
+        },
+        "areaDeclaration": {
+          ".validate": "newData.val() === 'inside'"
+        },
+        "agreementVersion": {
+          ".validate": "newData.val() === '1978-01-01'"
+        },
+        "status": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists()",
+          ".validate": "(data.parent().exists() ? (newData.parent().child('type').val() === 'application' ? (newData.val() === '受付済' || newData.val() === '確認中' || newData.val() === '修正待ち' || newData.val() === '別途協議中' || newData.val() === '確認完了') : (newData.val() === '未回答' || newData.val() === '対応中' || newData.val() === '回答済')) : (newData.val() === (newData.parent().child('type').val() === 'application' ? '受付済' : '未回答')))"
+        },
+        "drawingStatus": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists() && data.parent().child('type').val() === 'application'",
+          ".validate": "data.parent().exists() ? (newData.val() === '未受領' || newData.val() === '受領済み' || newData.val() === '差し替え待ち') : newData.val() === '未受領'"
+        },
+        "areaReview": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists()",
+          ".validate": "data.parent().exists() && (newData.val() === '未確認' || newData.val() === '区域内' || newData.val() === '区域外' || newData.val() === '要協議')"
+        },
+        "note": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists()",
+          ".validate": "data.parent().exists() && newData.isString() && newData.val().length <= 4000"
+        },
+        "info": {
+          ".validate": "newData.hasChildren([\"owner\", \"ownerAddress\", \"ownerPhone\", \"applicantAddress\", \"applicantPhone\", \"work\", \"start\", \"end\"])",
+          "owner": {
+            ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+          },
+          "ownerAddress": {
+            ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+          },
+          "ownerPhone": {
+            ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+          },
+          "applicantAddress": {
+            ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+          },
+          "applicantPhone": {
+            ".validate": "newData.isString() && newData.val().length <= 150 && newData.val().matches(/.*\\S.*/)"
+          },
+          "work": {
+            ".validate": "newData.val() === 'new' || newData.val() === 'addition'"
+          },
+          "start": {
+            ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}$/)"
+          },
+          "end": {
+            ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}$/)"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "checks": {
+          ".validate": "newData.hasChildren([\"0\", \"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\"])",
+          "$index": {
+            ".validate": "$index.matches(/^[0-8]$/) && newData.val() === true"
+          }
+        },
+        "$other": {
+          ".validate": false
+        },
+        "mailStatus": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists()",
+          ".validate": "data.parent().exists() && (newData.val() === 'メール待ち' || newData.val() === 'メール受領' || newData.val() === '返信済み')"
+        },
+        "gmailThreadUrl": {
+          ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().exists() && newData.exists()",
+          ".validate": "data.parent().exists() && newData.isString() && newData.val().length <= 500 && (newData.val() === '' || newData.val().matches(/^https:\\/\\/mail\\.google\\.com\\/mail\\/u\\/[^\\s]+$/))"
+        },
+        "history": {
+          ".validate": "data.parent().exists()",
+          "$entry": {
+            ".write": "auth != null && auth.token.agreementAdmin === true && data.parent().parent().exists() && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['at', 'summary'])",
+            "at": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "summary": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

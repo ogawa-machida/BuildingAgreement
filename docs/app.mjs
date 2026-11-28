@@ -66,17 +66,79 @@ function applicationData(values) {
   };
 }
 
-function showReceipt(result, id, type) {
-  result.textContent = `受け付けました。受付番号 ${id}`;
-  if (type !== "application") return;
+function destination() {
   const address = settings.drawingEmail;
+  if (!/^[^\s@?:/,;]+@[^\s@?:/,;]+\.[^\s@?:/,;]+$/.test(address ?? "")) {
+    throw new Error("会のメール送付先の設定が準備中です。");
+  }
+  return address;
+}
+
+function draftUrl(address, subject, body) {
+  return `mailto:${encodeURIComponent(address).replace("%40", "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.replace(/\r?\n/g, "\r\n"))}`;
+}
+
+function mailLink(address, subject, body, label) {
   const link = document.createElement("a");
-  const subject = encodeURIComponent(`【建築協約】図面送付｜受付番号 ${id}`);
-  const body = encodeURIComponent(`受付番号：${id}\n提出図面のPDFを添付して送信してください。\n`);
-  link.href = `mailto:${encodeURIComponent(address).replace("%40", "@")}?subject=${subject}&body=${body}`;
-  link.textContent = "図面送付用のメールを開く";
-  result.append(document.createElement("br"), link,
-    document.createTextNode(`（図面送付先：${address}）`));
+  link.href = draftUrl(address, subject, body);
+  link.textContent = label;
+  return link;
+}
+
+function appendText(result, text) {
+  result.append(document.createElement("br"), document.createTextNode(text));
+}
+
+function caseUrl(id) {
+  const url = new URL("./admin.html", location.href);
+  url.searchParams.set("case", id);
+  return url.href;
+}
+
+function showReceipt(result, id, email, files) {
+  const address = destination();
+  const subject = `【建築協約】図面送付｜受付番号 ${id}`;
+  const body = `受付番号：${id}\nフォームに入力した返信先：${email}\n会の管理画面：${caseUrl(id)}\n`;
+  result.textContent = `申請を受け付けました。受付番号 ${id}。図面をメールで送信してください。`;
+  appendText(result, `宛先：${address}　件名：${subject}`);
+  appendText(result, `選択したPDF：${files.map(file => file.name).join("、")}`);
+  const shareData = { files, title: subject, text: `宛先：${address}\n件名：${subject}\n${body}` };
+  const shareStatus = document.createElement("span");
+  if (navigator.share && navigator.canShare?.({ files })) {
+    const share = document.createElement("button");
+    share.type = "button";
+    share.textContent = "PDFを共有してメールアプリを選ぶ";
+    share.onclick = async () => {
+      try {
+        await navigator.share(shareData);
+        shareStatus.textContent = "メールアプリで宛先・件名・添付を確認して送信してください。";
+      } catch (error) {
+        if (error.name !== "AbortError") shareStatus.textContent = "PDFを渡せませんでした。下のリンクからメールを開き、手動で添付してください。";
+      }
+    };
+    appendText(result, "共有メニューでメールを選び、上記の宛先と件名を確認してください。");
+    result.append(document.createElement("br"), share, document.createElement("br"), shareStatus);
+  }
+  result.append(document.createElement("br"),
+    mailLink(address, subject, body + "提出図面のPDFを添付して送信します。\n", "宛先・件名入りのメールを開く（PDFは手動で添付）"));
+}
+
+function showQuestionReceipt(result, id, values) {
+  const subject = `【建築協約】質問・事前相談｜受付番号 ${id}`;
+  const body = `受付番号：${id}\n氏名：${values.name}\n会社名：${values.company}\n建築場所：${values.address}\n返信先：${values.email}\n\n${values.message}\n\n会の管理画面：${caseUrl(id)}`;
+  const address = destination();
+  result.textContent = `台帳に登録しました。受付番号 ${id}。下のリンクからメールを開いて送信してください。`;
+  if (draftUrl(address, subject, body).length <= 1800) {
+    result.append(document.createElement("br"), mailLink(address, subject, body, "質問・相談のメールを開く"));
+    return;
+  }
+  appendText(result, "下の本文をコピーして、メールに貼り付けてください。");
+  const copy = document.createElement("textarea");
+  copy.readOnly = true;
+  copy.rows = 6;
+  copy.setAttribute("aria-label", "コピー用のメール本文");
+  copy.value = body;
+  result.append(copy, mailLink(address, subject, "", "メールアプリを開く"));
 }
 
 function bindSubmission(form, result, type) {
@@ -92,13 +154,14 @@ function bindSubmission(form, result, type) {
     elements.forEach(control => { control.disabled = true; });
     try {
       if (!attempt) {
-        const { name, company, address, email, message, confirm } = values;
-        const isApplication = type === "application";
-        const extra = isApplication ? applicationData(values) : { message: message.trim() };
-        if (isApplication && !/^[^\s@?:/]+@[^\s@?:/]+\.[^\s@?:/]+$/.test(settings.drawingEmail ?? "")) {
-          throw new Error("図面送付先の設定が準備中です。");
+        const { name, company, address, email, confirm, message } = values;
+        destination();
+        const files = type === "application" ? [...$("drawing-files").files] : [];
+        if (type === "application" && (!files.length || files.some(file => !file.size || !/\.pdf$/i.test(file.name)))) {
+          throw new Error("空でないPDFを選択してください。");
         }
-        attempt = { id: crypto.randomUUID(),
+        const extra = type === "application" ? applicationData(values) : { message: message.trim() };
+        attempt = { id: crypto.randomUUID(), files,
           payload: { name: name.trim(), company: company.trim(), address: address.trim(),
             email: email.trim(), type, consent: confirm === "on", ...extra } };
       }
@@ -108,8 +171,7 @@ function bindSubmission(form, result, type) {
       const { ref, set, get, serverTimestamp } = api.databaseApi;
       const path = `cases/${attempt.id}`;
       const { area, ...payload } = attempt.payload;
-      const details = type === "application"
-        ? { areaDeclaration: area, agreementVersion: "1978-01-01", drawingStatus: "未受領" } : {};
+      const details = type === "application" ? { areaDeclaration: area, agreementVersion: "1978-01-01", drawingStatus: "未受領" } : {};
       try {
         await set(ref(api.db, path), { ...payload, ...details, uid: api.user.uid,
           submittedAt: serverTimestamp(), status: type === "application" ? "受付済" : "未回答" });
@@ -117,7 +179,8 @@ function bindSubmission(form, result, type) {
         const saved = await get(ref(api.db, `${path}/submittedAt`)).catch(() => null);
         if (!saved?.exists()) throw error;
       }
-      showReceipt(result, attempt.id, type);
+      if (type === "application") showReceipt(result, attempt.id, attempt.payload.email, attempt.files);
+      else showQuestionReceipt(result, attempt.id, attempt.payload);
       form.reset();
       attempt = undefined;
     } catch (error) {
