@@ -10,3 +10,5 @@ export const firebaseConfig = {
 export const region = "asia-northeast1";
 export const appCheckSiteKey = "6LeTCTMuAAAAAPG4hxok3RBq4QKQAEgGEpNl8UTO";
 export const drawingEmail = "sasaki0369@gmail.com";
+
+export const drawingUploadUrl = "https://script.google.com/macros/s/AKfycbxu-iyLkmhm1Ja_9vuQO8YrLa4gU8_GWlXSFmfKtd58wL8wsjWdOKEq1_yZ7u0zfdUtvQ/exec";
