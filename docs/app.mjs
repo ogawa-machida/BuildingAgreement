@@ -95,32 +95,48 @@ function caseUrl(id) {
   return url.href;
 }
 
-function showReceipt(result, id, email, files) {
-  const address = destination();
-  const subject = `【建築協約】図面送付｜受付番号 ${id}`;
-  const body = `受付番号：${id}\nフォームに入力した返信先：${email}\n会の管理画面：${caseUrl(id)}\n`;
-  result.textContent = `申請を受け付けました。受付番号 ${id}。図面をメールで送信してください。`;
-  appendText(result, `宛先：${address}　件名：${subject}`);
-  appendText(result, `選択したPDF：${files.map(file => file.name).join("、")}`);
-  const shareData = { files, title: subject, text: `宛先：${address}\n件名：${subject}\n${body}` };
-  const shareStatus = document.createElement("span");
-  if (navigator.share && navigator.canShare?.({ files })) {
-    const share = document.createElement("button");
-    share.type = "button";
-    share.textContent = "PDFを共有してメールアプリを選ぶ";
-    share.onclick = async () => {
-      try {
-        await navigator.share(shareData);
-        shareStatus.textContent = "メールアプリで宛先・件名・添付を確認して送信してください。";
-      } catch (error) {
-        if (error.name !== "AbortError") shareStatus.textContent = "PDFを渡せませんでした。下のリンクからメールを開き、手動で添付してください。";
-      }
-    };
-    appendText(result, "共有メニューでメールを選び、上記の宛先と件名を確認してください。");
-    result.append(document.createElement("br"), share, document.createElement("br"), shareStatus);
+const maxDrawingBytes = 10 * 1024 * 1024;
+
+function drawingUploadUrl() {
+  const url = new URL(settings.drawingUploadUrl || "https://script.google.com/");
+  if (url.origin !== "https://script.google.com" || !/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url.pathname)
+      || url.username || url.password || url.search || url.hash) {
+    throw new Error("図面の提出先が準備中です。");
   }
-  result.append(document.createElement("br"),
-    mailLink(address, subject, body + "提出図面のPDFを添付して送信します。\n", "宛先・件名入りのメールを開く（PDFは手動で添付）"));
+  return url.href;
+}
+
+async function drawingFiles(files) {
+  if (!files.length || files.length > 8 || files.reduce((sum, file) => sum + file.size, 0) > maxDrawingBytes) {
+    throw new Error("PDFを１〜８件、合計10 MB以内で選んでください。");
+  }
+  return Promise.all(files.map(async file => {
+    if (!/\.pdf$/i.test(file.name) || file.name.length > 160 || await file.slice(0, 5).text() !== "%PDF-") {
+      throw new Error("選択したファイルをPDFでご用意ください。");
+    }
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+      reader.onerror = () => reject(new Error("PDFを読み込めませんでした。"));
+      reader.readAsDataURL(file);
+    });
+    return { name: file.name, data };
+  }));
+}
+
+function postDrawings(url, payload, target) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = url;
+  form.target = target;
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "payload";
+  input.value = JSON.stringify(payload);
+  form.append(input);
+  document.body.append(form);
+  form.submit();
+  form.remove();
 }
 
 function showQuestionReceipt(result, id, values) {
@@ -149,17 +165,18 @@ function bindSubmission(form, result, type) {
     event.preventDefault();
     if (pending) return;
     pending = true;
+    const target = "drawing-receipt-" + crypto.randomUUID();
+    const receiptWindow = type === "application" ? window.open("about:blank", target) : null;
+    if (receiptWindow) receiptWindow.document.title = "図面送信の準備中";
     const values = Object.fromEntries(new FormData(form));
     const elements = [...form.elements];
     elements.forEach(control => { control.disabled = true; });
     try {
       if (!attempt) {
         const { name, company, address, email, confirm, message } = values;
-        destination();
-        const files = type === "application" ? [...$("drawing-files").files] : [];
-        if (type === "application" && (!files.length || files.some(file => !file.size || !/\.pdf$/i.test(file.name)))) {
-          throw new Error("空でないPDFを選択してください。");
-        }
+        if (type === "application") drawingUploadUrl();
+        else destination();
+        const files = type === "application" ? await drawingFiles([...$("drawing-files").files]) : [];
         const extra = type === "application" ? applicationData(values) : { message: message.trim() };
         attempt = { id: crypto.randomUUID(), files,
           payload: { name: name.trim(), company: company.trim(), address: address.trim(),
@@ -171,7 +188,7 @@ function bindSubmission(form, result, type) {
       const { ref, set, get, serverTimestamp } = api.databaseApi;
       const path = `cases/${attempt.id}`;
       const { area, ...payload } = attempt.payload;
-      const details = type === "application" ? { areaDeclaration: area, agreementVersion: "1978-01-01", drawingStatus: "未受領" } : {};
+      const details = type === "application" ? { areaDeclaration: area, agreementVersion: "1978-01-01", drawingStatus: "未受領", driveState: "uploading" } : {};
       try {
         await set(ref(api.db, path), { ...payload, ...details, uid: api.user.uid,
           submittedAt: serverTimestamp(), status: type === "application" ? "受付済" : "未回答" });
@@ -179,11 +196,18 @@ function bindSubmission(form, result, type) {
         const saved = await get(ref(api.db, `${path}/submittedAt`)).catch(() => null);
         if (!saved?.exists()) throw error;
       }
-      if (type === "application") showReceipt(result, attempt.id, attempt.payload.email, attempt.files);
-      else showQuestionReceipt(result, attempt.id, attempt.payload);
-      form.reset();
-      attempt = undefined;
+      if (type === "application") {
+        const [idToken, appCheck] = await Promise.all([api.user.getIdToken(), api.appCheckToken()]);
+        postDrawings(drawingUploadUrl(), { id: attempt.id, idToken, appCheck, files: attempt.files },
+          receiptWindow ? target : "_self");
+        result.textContent = "送信結果は図面受付の画面でご確認ください。送信に失敗した場合はこの画面から再試行できます。";
+      } else {
+        showQuestionReceipt(result, attempt.id, attempt.payload);
+        form.reset();
+        attempt = undefined;
+      }
     } catch (error) {
+      receiptWindow?.close();
       const message = !error.code || error.code === "invalid-argument" ? error.message
         : "送信できませんでした。時間をおいて、もう一度送信してください。";
       result.textContent = message;

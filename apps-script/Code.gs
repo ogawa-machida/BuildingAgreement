@@ -63,6 +63,11 @@ function sendNewCaseNotifications() {
     const recipients = adminEmails();
     if (!recipients.length) throw new Error("有効な管理者のメールアドレスがありません。");
     for (const [id, row] of cases.slice(0, 50)) {
+      if (row.driveState === "uploading") {
+        cursor = { time: row.submittedAt, ids: row.submittedAt === cursor.time ? [...cursor.ids, id] : [id] };
+        properties.setProperty("notificationCursor", JSON.stringify(cursor));
+        continue;
+      }
       if (MailApp.getRemainingDailyQuota() < recipients.length) return;
       const label = row.type === "application" ? "建築承認願い" : "質問・事前相談";
       MailApp.sendEmail({

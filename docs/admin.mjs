@@ -79,6 +79,63 @@ function renderList() {
   }));
   if (!filtered.length) list.append(element("li", "該当する案件がありません。"));
 }
+function drawingWorkflow(row) {
+  const section = element("section");
+  section.append(element("h3", "提出図面・竣工確認"));
+  if (row.driveState === "uploading") {
+    section.append(element("p", "図面の提出待ち"));
+    return section;
+  }
+  if (row.approvedAt) section.append(element("p", "建築承認日時：" + date(row.approvedAt)));
+  if (row.completedAt) section.append(element("p", "竣工確認日時：" + date(row.completedAt)));
+  if (row.drawingsDeletedAt) {
+    section.append(element("p", "図面削除済み：" + date(row.drawingsDeletedAt)));
+    return section;
+  }
+  if (row.completedAt) {
+    section.append(element("p", "図面削除待ち。自動処理の結果は「一覧を更新」で確認できます。"));
+    return section;
+  }
+  if (row.approvedAt) section.append(element("p", "承認済み・竣工待ち"));
+  const files = element("ul");
+  for (const file of Object.values(row.drawingFiles ?? {})) {
+    if (!/^[A-Za-z0-9_-]+$/.test(file.id)) continue;
+    const item = element("li");
+    const link = element("a", file.name);
+    link.href = "https://drive.google.com/file/d/" + file.id + "/view";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    item.append(link);
+    files.append(item);
+  }
+  section.append(files);
+  const complete = Boolean(row.approvedAt);
+  const button = element("button", complete ? "竣工確認を記録" : "建築承認を記録");
+  const result = element("output");
+  result.setAttribute("role", "status");
+  button.onclick = async () => {
+    if (complete && !window.confirm("実際の竣工を確認しましたか？ この案件の図面が自動で完全削除されます。")) return;
+    button.disabled = true;
+    try {
+      const { ref, update, push, serverTimestamp } = api.databaseApi;
+      const path = `cases/${row.id}`;
+      const key = push(ref(api.db, `${path}/history`)).key;
+      const changes = complete ? { completedAt: serverTimestamp(), purgeRequested: true }
+        : { approvedAt: serverTimestamp() };
+      await update(ref(api.db, path), { ...changes,
+        [`history/${key}`]: { at: serverTimestamp(), summary: complete ? "竣工確認・図面削除待ち" : "建築承認・竣工待ち" } });
+      await listCases();
+      await openCaseById(row.id);
+    } catch {
+      result.textContent = "結果を表示できませんでした。「一覧を更新」で記録を確認してください。";
+    } finally {
+      button.disabled = false;
+    }
+  };
+  section.append(button, result);
+  return section;
+}
+
 function openCase(row) {
   selected = row.id;
   const heading = element("h2", row.type === "application" ? "建築承認願い" : "質問・事前相談");
@@ -91,7 +148,8 @@ function openCase(row) {
       element("h3", "協約の自己確認"), element("pre", Array.isArray(row.checks)
         ? row.checks.map((checked, i) => `${i + 1}） ${checked ? "確認済み" : "未確認"}`).join("\n")
         : toLines(row.answers ?? {}, answerNames)),
-      element("p", "図面はメールの件名にある受付番号で照合してください。"));
+      row.driveState ? drawingWorkflow(row)
+        : element("p", "過去にメール提出された図面は受付番号で照合してください。"));
   } else {
     detail.append(element("h3", "相談内容"), element("pre", row.message));
   }
@@ -99,7 +157,7 @@ function openCase(row) {
     : ["未回答", "対応中", "回答済"];
   const state = selectField("対応状況", states, row.status);
   const area = selectField("会による区域の確認", ["未確認", "区域内", "区域外", "要協議"], row.areaReview);
-  const drawing = row.type === "application"
+  const drawing = row.type === "application" && !row.driveState
     ? selectField("図面の受領状況", ["未受領", "受領済み", "差し替え待ち"], row.drawingStatus) : null;
   const mail = selectField("メール対応", ["メール待ち", "メール受領", "返信済み"], row.mailStatus);
   const threadLabel = element("label", "GmailのスレッドURL");
